@@ -144,3 +144,7 @@ temp/
 *.md
 Phases.md
 PHASES.md
+
+# bench artifacts (regenerable)
+bench/reports/
+bench/wavs/
