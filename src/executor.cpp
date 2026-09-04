@@ -101,6 +101,12 @@ static const std::vector<std::string> kDenyPatterns = {
     "userdel ", "passwd root",
     "> /etc/passwd", "> /etc/shadow",
     "fdisk /dev/", "parted /dev/", "wipefs",
+    // Added 2026-09-04 after a live near-miss: ASR heard "run shut down now"
+    // as "run shred down now", the model emitted `shred -v /`, and it EXECUTED
+    // — it only failed because / is not user-writable. `shred -v ~` would have
+    // destroyed the home directory. Same class as dd/mkfs; belongs on the deny
+    // list, not the caution list.
+    "shred ", "find / -delete", "truncate -s 0 /",
 };
 
 static const std::vector<std::string> kCautionPatterns = {
