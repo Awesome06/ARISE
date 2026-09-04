@@ -1,4 +1,5 @@
 #include "daemon.hpp"
+#include "textutil.hpp"
 #include "logger.hpp"
 #include "config.hpp"
 #include "recorder.hpp"
@@ -629,8 +630,11 @@ void Daemon::handleLLMResponse(LLMResponse& response, LLMContext& ctx,
                              " (max=" + std::to_string(maxSteps) + ")");
                 // Synthesize something from the last observation so the user
                 // isn't left in silence when the LLM forgets to call task_done.
-                std::string summary = lastObservation;
-                if (summary.size() > 200) summary = summary.substr(0, 200) + "...";
+                // lastObservation is raw tool output — strip escape codes and
+                // cut on a word boundary before it reaches Piper, or a bare
+                // `neofetch` here gets read out as ANSI art mid-word.
+                std::string summary =
+                    textutil::truncateAtWord(textutil::stripAnsi(lastObservation), 200);
                 if (summary.empty())
                     tts_->speak("Done after " + std::to_string(step) + " steps.");
                 else

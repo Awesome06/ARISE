@@ -1,4 +1,6 @@
 #include "executor.hpp"
+#include "context.hpp"
+#include "textutil.hpp"
 #include "logger.hpp"
 #include "config.hpp"
 #include "screen.hpp"
@@ -369,8 +371,15 @@ std::string Executor::execute(const AgentAction& action) {
             for (auto& w : windows) {
                 std::string app = w.value("app_id", "unknown");
                 std::string title = w.value("title", "");
-                if (title.size() > 60) title = title.substr(0, 60) + "...";
-                out << app << ": " << title << "\n";
+                // Same suppression Context::capture() applies: a terminal's
+                // title is the running shell command, and this string gets
+                // spoken verbatim (list_windows is not in the ReAct set, so
+                // the LLM never cleans it up). On 2026-09-01 ARIA read out
+                // "org.gnome.Console: cd ai-agent; cmake --build build...".
+                if (Context::isTerminalApp(app)) title.clear();
+                title = textutil::truncateAtWord(title, 60);
+                if (title.empty()) out << app << "\n";
+                else               out << app << ": " << title << "\n";
             }
             std::string result = out.str();
             return result.empty() ? "No windows open." : result;

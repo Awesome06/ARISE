@@ -85,7 +85,14 @@ private:
                                    // so the model sees its own call history.
     };
     std::deque<Message> history_;
-    static constexpr int MAX_HISTORY = 16;
+    // Ollama's prefix cache only covers a byte-identical prefix. Evicting one
+    // message per turn (the old `while (size > MAX) pop_front()`) shifts every
+    // byte after the persona on EVERY turn, so once history saturates the cache
+    // never hits again — measured 222ms -> 1550ms permanent, 2026-09-01 session.
+    // Trimming in one batch down to a low watermark keeps the prefix stable for
+    // (MAX_HISTORY - HISTORY_LOW_WATER)/2 turns between misses instead.
+    static constexpr int MAX_HISTORY       = 16;
+    static constexpr int HISTORY_LOW_WATER = 10;
 
     // Health check cache
     std::chrono::steady_clock::time_point lastHealthCheck_{};

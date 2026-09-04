@@ -25,7 +25,7 @@ static std::string exec(const char* cmd) {
 // Terminal-like apps where OCR is both expensive (dense text) and
 // low-signal (command history + clipboard already carry the relevant text).
 // Skip OCR for these, fall through for GUI apps where OCR is most useful.
-static bool isTerminalApp(const std::string& app) {
+bool Context::isTerminalApp(const std::string& app) {
     static const char* kTerms[] = {
         "org.gnome.Console", "alacritty", "Alacritty", "kitty",
         "foot", "footclient", "wezterm", "terminator", "xterm",
@@ -77,11 +77,11 @@ SystemContext Context::capture() {
     // it were user intent. The activeApp ("alacritty"/"org.gnome.Console")
     // already conveys "user is at a terminal", so drop the title in that
     // case rather than injecting shell history into every prompt.
-    ctx.activeWindow = isTerminalApp(app) ? std::string{} : win;
+    ctx.activeWindow = Context::isTerminalApp(app) ? std::string{} : win;
 
     std::future<std::string> screenF;
     bool ocrSkipped = false;
-    if (isTerminalApp(app)) {
+    if (Context::isTerminalApp(app)) {
         ocrSkipped = true;
     } else {
         std::string key = app + "|" + win;

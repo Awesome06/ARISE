@@ -29,6 +29,28 @@ static std::string sanitizeForSpeech(const std::string& in) {
     if (in.empty()) return in;
     std::string s = in;
 
+    // Strip leaked ReAct control markers. The react prompt hands the model the
+    // literal identifier "task_done", and a small model will sometimes narrate
+    // it as prose instead of emitting the tool call — on 2026-09-01 ARIA spoke
+    // "Task_done: NeoFetch ran successfully..." out loud. Deltas stream
+    // straight to Piper, so the only place that catches every path is here.
+    // Anchored at string or sentence start so ordinary speech is untouched.
+    s = std::regex_replace(
+        s,
+        std::regex(R"((^|[.!?\n]\s*)(task[_ ]?done|final[_ ]?answer|action[_ ]?input|observation|thought|action)\s*[:\-]\s*)",
+                   std::regex::icase),
+        "$1");
+
+    // A bare snake_case identifier is a tool name the model emitted as prose
+    // instead of a real call (aria-bench core catches this on llm_remember,
+    // where qwen3:8b answers the literal text "remember_fact"). Piper would
+    // spell it out. Only fires when the identifier IS the whole utterance, so
+    // ordinary speech that merely contains an underscore is left alone.
+    {
+        static const std::regex kBareToolName(R"(^\s*[a-z]+(?:_[a-z]+)+\s*[.!]?\s*$)");
+        if (std::regex_match(s, kBareToolName)) return "";
+    }
+
     // Strip JSON wrappers — {"command":"..."} → ...
     s = std::regex_replace(s, std::regex(R"(\{\s*\"[a-zA-Z_]+\"\s*:\s*\")"), " ");
     s = std::regex_replace(s, std::regex(R"(\"\s*\})"), " ");

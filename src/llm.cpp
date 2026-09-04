@@ -2,6 +2,7 @@
 #include "logger.hpp"
 #include "config.hpp"
 #include "memory.hpp"
+#include "textutil.hpp"
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
 #include <chrono>
@@ -1151,8 +1152,16 @@ void LLM::updateHistory(const std::string& userText, const LLMResponse& result,
         history_.push_back(std::move(m));
     }
 
-    while (static_cast<int>(history_.size()) > MAX_HISTORY)
-        history_.pop_front();
+    // Trim in ONE batch down to the low watermark rather than evicting a
+    // single message per turn. Ollama's prefix cache needs a byte-identical
+    // prefix; popping one message every turn shifts everything after the
+    // persona every turn, so the cache stops hitting entirely once history
+    // saturates and never recovers for the life of the process.
+    if (static_cast<int>(history_.size()) > MAX_HISTORY) {
+        const size_t drop = history_.size() - static_cast<size_t>(HISTORY_LOW_WATER);
+        history_.erase(history_.begin(),
+                       history_.begin() + static_cast<std::ptrdiff_t>(drop));
+    }
 }
 
 // ─── Public streaming API ───
@@ -1188,6 +1197,11 @@ LLMResponse LLM::thinkStreaming(const std::string& userText, const LLMContext& c
     return result;
 }
 
+// How much of a tool observation survives into the rolling history. Enough to
+// answer a follow-up ("what was the memory figure again?"), far short of a
+// screenful of terminal art.
+static constexpr size_t kMaxStoredObservation = 600;
+
 LLMResponse LLM::reactStreaming(const std::string& observation, const LLMContext& ctx,
                                  StreamCallback onDelta) {
     Logger::info("LLM: react observation → " + observation);
@@ -1200,7 +1214,15 @@ LLMResponse LLM::reactStreaming(const std::string& observation, const LLMContext
     messages.push_back({{"role", "user"}, {"content", wrapWithState(reactPrompt, ctx)}});
 
     auto result = chatStreaming(messages, onDelta);
-    updateHistory("OBSERVATION: " + observation, result);
+    // The model sees the FULL observation above, for this turn only. What gets
+    // persisted is bounded: raw tool output (neofetch, niri JSON, df) is mostly
+    // escape codes and is ~1.6 bytes/token, so storing it verbatim inflated the
+    // rolling prompt by ~1200 tokens permanently and pushed history past
+    // MAX_HISTORY in a single step — the two effects that made prefill jump
+    // from ~350ms to ~1750ms and stay there (2026-09-01 session).
+    updateHistory("OBSERVATION: " + textutil::truncateAtWord(
+                      textutil::stripAnsi(observation), kMaxStoredObservation),
+                  result);
     return result;
 }
 
