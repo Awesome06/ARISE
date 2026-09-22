@@ -54,6 +54,7 @@ ARISE.3.0 (unchanged)
 ║  Change 2  ──  Arch Linux Container  (archlinux:latest pinned digest)        ║
 ║  Change 3  ──  Google Test Suite     (Logger · LLMResponse · AgentAction)    ║
 ║  Change 4  ──  Continuous Integration(GitHub Actions CI Pipeline)            ║
+║  Change 5  ──  Production Stability  (Thread-safety & File handles)          ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -276,6 +277,15 @@ To prevent broken code from ever being merged into `main` or `ARISE.3.0`, a full
 3. **Execution:** Builds the `arise-test:ci` image and runs the full 20-test CTest suite inside the isolated Arch environment.
 4. **Log Extraction:** If a test fails, it extracts and uploads the `LastTest.log` directly into the GitHub Actions UI so developers don't have to rebuild locally to see why it failed.
 5. **Merge Protection:** Can be configured in GitHub repository settings to require this workflow to pass before the "Merge" button turns green.
+
+---
+
+## 🔒 Change 5 — Production Stability Improvements
+
+During the implementation of the QA testing suite, the following proactive stability fixes were applied to the core `src/` codebase to harden it for production:
+
+- **Logger Thread Safety:** Wrapped `Logger::init` file opening operations in a `std::lock_guard<std::mutex>`. This eliminates a theoretical data race if a background thread attempts to log a message at the exact millisecond the application is initializing or re-initializing the logger stream.
+- **Robust File Handle Management:** Implemented `Logger::close()` to explicitly release file locks. This guarantees the OS fully drops the inode, preventing silent failures when logs are heavily rotated or rapidly accessed by test suites on Arch Linux `tmpfs`.
 
 ---
 

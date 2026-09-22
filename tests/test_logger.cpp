@@ -47,11 +47,10 @@ protected:
     void SetUp() override {
         // Build a unique path per test case using the test's own name.
         // This prevents any cross-test file descriptor sharing.
-        // We use a relative path so this works natively on Windows too 
-        // (writes safely into the build/ directory where CTest runs).
+        // We write to /tmp/ so we don't pollute the project directory on Arch Linux.
         const ::testing::TestInfo* info =
             ::testing::UnitTest::GetInstance()->current_test_info();
-        tmpLog = std::string("arise_logger_") + info->name() + ".log";
+        tmpLog = std::string("/tmp/arise_logger_") + info->name() + ".log";
 
         // Remove any stale file from a previous failed run
         std::remove(tmpLog.c_str());
