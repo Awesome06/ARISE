@@ -51,8 +51,9 @@ ARISE.3.0 (unchanged)
 ║                         EXTRAS CONTRIBUTION SURFACE                          ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║  Change 1  ──  Portable CMake        (backwards-compatible, FetchContent)    ║
-║  Change 2  ──  Arch Linux Container  (archlinux:latest, pacman, ctest)       ║
+║  Change 2  ──  Arch Linux Container  (archlinux:latest pinned digest)        ║
 ║  Change 3  ──  Google Test Suite     (Logger · LLMResponse · AgentAction)    ║
+║  Change 4  ──  Continuous Integration(GitHub Actions CI Pipeline)            ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -73,18 +74,18 @@ This made the project impossible to compile on any other machine, including insi
 
 ### The Fix
 
-The new CMake build uses a **two-stage strategy** that is completely backwards-compatible with your existing workflow.
+The new CMake build uses a **two-stage strategy** via a configurable cache variable. It is completely portable and embeds no user-specific paths in the repository.
 
 ```cmake
-# NEW — checks for your local copy first, falls back gracefully
-set(LOCAL_WHISPER_DIR "/home/Aurelius/Documents/AdoVs/whisper.cpp")
+# NEW — opt-in local path, gracefully falls back to FetchContent
+set(WHISPER_DIR "OFF" CACHE PATH "Path to a local whisper.cpp checkout...")
 
-if(EXISTS "${LOCAL_WHISPER_DIR}/CMakeLists.txt")
-    # ✅ Your dev machine: uses your local pre-built whisper instantly
+if(NOT WHISPER_DIR STREQUAL "OFF" AND EXISTS "${WHISPER_DIR}/CMakeLists.txt")
+    # ✅ Your dev machine: configure with -DWHISPER_DIR=/path/to/whisper
     message(STATUS "ARISE: using local whisper.cpp")
     ...
 else()
-    # ✅ CI / Docker / new machine: fetches + builds whisper.cpp automatically
+    # ✅ CI / Docker / fresh machine: fetches + builds whisper.cpp automatically
     FetchContent_Declare(whisper_cpp ...)
     FetchContent_MakeAvailable(whisper_cpp)
 endif()
@@ -126,13 +127,13 @@ ARISE is designed for Arch Linux. The Docker container mirrors the target OS exa
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                    Docker: archlinux:latest                       │
+│                    Docker: archlinux (pinned)                     │
 │                                                                  │
-│   pacman -S base-devel cmake git curl nlohmann-json              │
-│             alsa-lib portaudio                                    │
+│   pacman -Sy base-devel cmake git curl nlohmann-json             │
+│              alsa-lib portaudio                                   │
 │                                                                  │
-│   cmake -S . -B build                                            │
-│       └── detects no local whisper.cpp                           │
+│   cmake -S . -B build -DWHISPER_DIR=OFF                          │
+│       └── forces no local whisper.cpp                            │
 │       └── FetchContent pulls whisper.cpp v1.7.1 from GitHub      │
 │       └── FetchContent pulls googletest v1.14 from GitHub        │
 │                                                                  │
@@ -262,23 +263,34 @@ ctest --output-on-failure -V    # verbose output
 
 ---
 
+## 🚀 Change 4 — Continuous Integration (CI)
+
+### GitHub Actions Pipeline
+To prevent broken code from ever being merged into `main` or `ARISE.3.0`, a fully automated GitHub Actions workflow was introduced.
+
+**File:** `.github/workflows/ci.yml`
+
+**How it works:**
+1. **Triggers:** Automatically runs on every push and pull request.
+2. **Layer Caching:** Uses Docker Buildx to heavily cache the Arch Linux package installation layers, speeding up CI times significantly.
+3. **Execution:** Builds the `arise-test:ci` image and runs the full 20-test CTest suite inside the isolated Arch environment.
+4. **Log Extraction:** If a test fails, it extracts and uploads the `LastTest.log` directly into the GitHub Actions UI so developers don't have to rebuild locally to see why it failed.
+5. **Merge Protection:** Can be configured in GitHub repository settings to require this workflow to pass before the "Merge" button turns green.
+
+---
+
 <div align="center">
 
 ## 🌱 What Comes Next
 
 </div>
 
-These contributions lay the groundwork for a full CI/CD pipeline. Natural next steps:
+These contributions lay the groundwork for a highly stable project. Natural next steps:
 
 ```
 Extras Layer (this document)
     │
     └── Recommended Next Steps
-          ├── GitHub Actions workflow (.github/workflows/ci.yml)
-          │     └── Triggers on every Pull Request
-          │     └── Runs docker compose up --build test
-          │     └── Blocks merge if any test fails
-          │
           ├── clang-tidy static analysis in CI
           │     └── Catches bugs before they reach runtime
           │
