@@ -22,10 +22,12 @@
 
 <br>
 
-> *"ARIA was a voice assistant that happened to be good.*
-> *ARISE is not an assistant. It's a process that lives in your machine,*
-> *builds a model of you and your work, and makes itself useful*
-> *by thinking continuously — not by waiting to be addressed."*
+> [!CAUTION]
+> **PROPRIETARY — NOT OPEN SOURCE. ALL RIGHTS RESERVED.**
+> This repository is public for portfolio and evaluation purposes only.
+> You may view it. You may **not** clone, run, copy, modify, reuse any part
+> of it, or use it to train AI — for any purpose, personal or professional —
+> without my written permission. See [LICENSE](./LICENSE.md).
 
 </div>
 
