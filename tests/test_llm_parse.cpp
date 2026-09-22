@@ -7,6 +7,7 @@
 // -----------------------------------------------------------------------------
 
 #include <gtest/gtest.h>
+#include <vector>   // explicitly included — do not rely on transitive includes
 #include "llm.hpp"
 
 // ── AgentAction Tests ─────────────────────────────────────────────────────────

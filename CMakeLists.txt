@@ -11,22 +11,28 @@ include(FetchContent)
 find_package(CURL REQUIRED)
 find_package(nlohmann_json REQUIRED)
 
-# ── whisper.cpp: prefer a local checkout, fall back to FetchContent ───────────
-# This preserves your existing workflow on your dev machine without any changes.
-# On CI (Docker) or a fresh machine, it will download whisper.cpp automatically.
-set(LOCAL_WHISPER_DIR "/home/Aurelius/Documents/AdoVs/whisper.cpp")
+# ── whisper.cpp ───────────────────────────────────────────────────────────────
+# To use a local checkout, pass -DWHISPER_DIR=/path/to/whisper.cpp at configure
+# time. This is purely opt-in and portable — no developer-specific path is
+# ever embedded in the source tree.
+# If WHISPER_DIR is not provided (the default), whisper.cpp v1.7.1 is fetched
+# automatically via FetchContent and built as part of this project.
+#
+# Example:
+#   cmake -S . -B build -DWHISPER_DIR=/home/me/whisper.cpp
+set(WHISPER_DIR "OFF" CACHE PATH "Path to a local whisper.cpp checkout. Leave OFF to use FetchContent.")
 
-if(EXISTS "${LOCAL_WHISPER_DIR}/CMakeLists.txt")
-    message(STATUS "ARISE: using local whisper.cpp at ${LOCAL_WHISPER_DIR}")
-    set(WHISPER_DIR "${LOCAL_WHISPER_DIR}")
+if(NOT WHISPER_DIR STREQUAL "OFF" AND EXISTS "${WHISPER_DIR}/CMakeLists.txt")
+    message(STATUS "ARISE: using local whisper.cpp at ${WHISPER_DIR}")
     add_subdirectory(${WHISPER_DIR} ${CMAKE_BINARY_DIR}/whisper EXCLUDE_FROM_ALL)
-    set(WHISPER_LIBS whisper ggml)
-    set(WHISPER_INCLUDES
-        ${WHISPER_DIR}/include
-        ${WHISPER_DIR}/ggml/include
-    )
+    # Use the exported target from whisper.cpp's own CMakeLists.
+    # Both branches now link the same target for a consistent dependency graph.
+    set(WHISPER_TARGET whisper)
 else()
-    message(STATUS "ARISE: local whisper.cpp not found — fetching from GitHub")
+    if(NOT WHISPER_DIR STREQUAL "OFF")
+        message(WARNING "ARISE: WHISPER_DIR='${WHISPER_DIR}' does not contain CMakeLists.txt — falling back to FetchContent")
+    endif()
+    message(STATUS "ARISE: fetching whisper.cpp v1.7.1 from GitHub")
     FetchContent_Declare(
         whisper_cpp
         GIT_REPOSITORY https://github.com/ggerganov/whisper.cpp.git
@@ -36,8 +42,7 @@ else()
     set(WHISPER_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
     set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(whisper_cpp)
-    set(WHISPER_LIBS whisper)
-    set(WHISPER_INCLUDES "")
+    set(WHISPER_TARGET whisper)
 endif()
 
 # ── Core library (shared between the main binary and the test binary) ─────────
@@ -54,11 +59,10 @@ add_library(arise_core STATIC
 
 target_include_directories(arise_core PUBLIC
     src/
-    ${WHISPER_INCLUDES}
 )
 
 target_link_libraries(arise_core PUBLIC
-    ${WHISPER_LIBS}
+    ${WHISPER_TARGET}
     CURL::libcurl
     nlohmann_json::nlohmann_json
 )

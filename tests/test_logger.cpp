@@ -32,22 +32,38 @@ static bool fileContains(const std::string& path, const std::string& needle) {
 
 // The LoggerTest fixture sets up a clean environment before EACH test runs,
 // and cleans up after EACH test finishes. This ensures tests are isolated.
+//
+// ISOLATION STRATEGY:
+//   Logger::logFile is a process-global std::ofstream. To prevent the
+//   unlinked-inode bug (where a removed file's stream remains open on the
+//   old inode), we:
+//     1. Use a unique log path per test (embedded with the test name).
+//     2. Call Logger::close() in TearDown() BEFORE removing the file, so the
+//        OS fully releases the file descriptor before it is unlinked.
 class LoggerTest : public ::testing::Test {
 protected:
-    // We use a temporary path in /tmp so we don't pollute the project directory
-    const std::string tmpLog = "/tmp/arise_test_logger.log";
+    std::string tmpLog;
 
-    // SetUp() is executed automatically before every single TEST_F in this suite.
     void SetUp() override {
-        // Remove any leftover file from a previous test run to ensure a clean slate
+        // Build a unique path per test case using the test's own name.
+        // This prevents any cross-test file descriptor sharing.
+        const ::testing::TestInfo* info =
+            ::testing::UnitTest::GetInstance()->current_test_info();
+        tmpLog = std::string("/tmp/arise_logger_") + info->name() + ".log";
+
+        // Remove any stale file from a previous failed run
         std::remove(tmpLog.c_str());
-        // Re-initialize the logger to point to our fresh temporary file
+
+        // Initialize the logger, which will close any previously open stream
+        // (via the fix in Logger::init) before opening the new unique path.
         Logger::init(tmpLog);
     }
 
-    // TearDown() is executed automatically after every single TEST_F finishes.
     void TearDown() override {
-        // Clean up the temporary file so we leave no trace behind on the system
+        // CRITICAL: close the stream BEFORE removing the file.
+        // Without this, the global ofstream holds the inode open and
+        // the next Logger::init() re-opens the same deleted inode.
+        Logger::close();
         std::remove(tmpLog.c_str());
     }
 };
@@ -102,9 +118,10 @@ TEST_F(LoggerTest, MultipleWritesDontCorruptFile) {
     Logger::info("first");
     Logger::warn("second");
     Logger::error("third");
-    
+
     // We expect all three lines to exist in the same file simultaneously.
     EXPECT_TRUE(fileContains(tmpLog, "first"));
     EXPECT_TRUE(fileContains(tmpLog, "second"));
     EXPECT_TRUE(fileContains(tmpLog, "third"));
 }
+

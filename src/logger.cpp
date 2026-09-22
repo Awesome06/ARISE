@@ -34,6 +34,12 @@ namespace {
 }
 
 void Logger::init(const std::string& logfile) {
+    // Close any previously open stream before reopening.
+    // This is critical for test isolation: if init() is called again without
+    // closing first, the old inode stays open and the new file path is not used.
+    if (logFile.is_open()) {
+        logFile.close();
+    }
     logFile.open(logfile, std::ios::app);
     if (!logFile.is_open()) {
         std::cerr << "[WARN] Could not open log file: " << logfile << "\n";
@@ -44,3 +50,11 @@ void Logger::init(const std::string& logfile) {
 void Logger::info(const std::string& msg)  { write("INFO",  msg); }
 void Logger::warn(const std::string& msg)  { write("WARN",  msg); }
 void Logger::error(const std::string& msg) { write("ERROR", msg); }
+
+// Closes the log file stream so tests can safely delete the file on disk.
+void Logger::close() {
+    std::lock_guard<std::mutex> lock(logMutex);
+    if (logFile.is_open()) {
+        logFile.close();
+    }
+}
